@@ -3,9 +3,16 @@
 `deltachat-node-custom` is a patched distribution of the
 [deltachat-core-rust](https://github.com/chatmail/core) v1.121.0 sources with
 npm packaging metadata, maintained for a custom deltachat-desktop build. It
-contains the Rust core of Delta Chat (an email-based messaging library) plus
-the historical `package.json` of the old `deltachat-node` npm package, with a
-small number of local patches applied on top of upstream v1.121.0.
+contains the Rust core of Delta Chat (an email-based messaging library), the
+Node.js bindings of the historical `deltachat-node` npm package (in `node/`),
+and the historical `package.json` of that package, with a small number of
+local patches applied on top of upstream v1.121.0.
+
+It is consumed by the companion desktop fork
+[deltachat-desktop](https://github.com/SyntaxMusician/deltachat-desktop) — a
+deltachat-desktop v1.40.4 based fork whose UI uses the
+`set_chat_e2ee_enabled` JSON-RPC method and the `e2eeDisabled` field of
+`get_full_chat_by_id` (see "Custom changes" below).
 
 ## What is included
 
@@ -25,6 +32,14 @@ small number of local patches applied on top of upstream v1.121.0.
 - **Vendored dependencies** in `local-git/` (`quinn`, `rust-email`,
   `encoded-words`, `lettre`), wired in via `[patch]` sections in the root
   `Cargo.toml`; see [NOTICE.md](./NOTICE.md) for their licenses and upstream URLs
+- **`node/`** — the Node.js/JavaScript bindings taken from the historical
+  `deltachat-node@1.121.0` npm package: `binding.gyp`, `binding.js`,
+  `constants.js`, `events.js`, `tsconfig.json`, the TypeScript sources in
+  `lib/`, the C sources of the native addon in `src/`, the build scripts in
+  `scripts/`, `patches/`, `LICENSE`, `CONTRIBUTORS.md`, and the compiled JS
+  bindings in `dist/` (committed, so `require('deltachat-node')` works without
+  a TypeScript build step). Platform prebuilds (`node/prebuilds/`) are
+  intentionally **not** included — see "Packaging" below.
 - **`package.json` / `.npmignore` / `.npmrc`** — npm packaging metadata kept
   from the historical `deltachat-node` package (see "Packaging" below)
 
@@ -33,8 +48,6 @@ small number of local patches applied on top of upstream v1.121.0.
 This repository does **not** contain the following parts of the upstream
 repository:
 
-- `node/` — the Node.js/JavaScript bindings (the reason the old README and
-  `package.json` scripts referenced them; they do not exist here)
 - `python/` — the Python bindings
 - `scripts/` — helper scripts (e.g. `rebuild-core.js`)
 - `.github/` — CI workflows
@@ -70,6 +83,13 @@ Two features are patched in relative to upstream tag `v1.121.0`:
     left unencrypted). If any recipient key is missing, it falls back to the
     usual opportunistic encryption so sending never fails.
 - The `param` module is public (`pub mod param;` in `src/lib.rs`).
+- The toggle is exposed over JSON-RPC (`deltachat-jsonrpc`): new method
+  `set_chat_e2ee_enabled(account_id, chat_id, enabled)`
+  (`deltachat-jsonrpc/src/api/mod.rs`, right after `set_chat_ephemeral_timer`;
+  calls `ChatId::set_e2ee_disabled(&ctx, !enabled)`), and the new
+  `e2eeDisabled` field in the `FullChat` result of `get_full_chat_by_id`
+  (`deltachat-jsonrpc/src/api/types/chat.rs`, serialized via serde camelCase
+  and populated via `ChatId::is_e2ee_disabled`).
 
 ## Build
 
@@ -87,18 +107,41 @@ Requirements:
   sources (`rusqlite/bundled-sqlcipher-vendored-openssl`,
   `reqwest/native-tls-vendored`, `async-native-tls/vendored`), so a **C
   compiler** and **perl** are needed.
+- Node.js >= 16 (`engines` in `package.json`) for the npm install path below.
 
 `deltachat-ffi` produces the C library (`crate-type = ["cdylib", "staticlib"]`,
 library name `deltachat`); `deltachat-jsonrpc` is its own crate in the
 workspace.
 
+Installing this package as an npm dependency (`npm install`) runs
+`node/scripts/install.js` (the `install` script in `package.json`). Since no
+prebuilt binaries are shipped, `node-gyp-build` falls back to building from
+source: the Rust core is built with cargo
+(`cargo build --release --features vendored,jsonrpc -p deltachat_ffi`, via
+`node/scripts/rebuild-core.js`) and the native addon is built with
+`node-gyp rebuild`.
+
 ## Packaging
 
 The `package.json` in the repository root is kept from the historical
 `deltachat-node` npm package: name `deltachat-node`, version `1.121.788`,
-license `GPL-3.0-or-later`. However, the JavaScript bindings (`node/`) that
-this package originally shipped are **not** part of this repository — only the
-Rust sources and the packaging metadata are present.
+license `GPL-3.0-or-later`, entry point `node/dist/index.js`. The `node/`
+directory **is** part of this repository: the compiled JS bindings in
+`node/dist/` are committed, so `require('deltachat-node')` works without a
+TypeScript build step.
+
+Prebuilt platform binaries (`node/prebuilds/`) are intentionally **not**
+included: the native addon is always built from the patched Rust sources of
+this repository (see "Build"), which is the whole point of this fork.
+
+To use this package as a dependency of another npm project, point npm at this
+repository (npm supports the GitHub shorthand; a full git URL also works):
+
+```json
+"dependencies": {
+  "deltachat-node": "github:SyntaxMusician/deltachat-node-custom"
+}
+```
 
 ## License
 
