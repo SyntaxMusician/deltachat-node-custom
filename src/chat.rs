@@ -1204,6 +1204,29 @@ impl ChatId {
 
         Ok(())
     }
+    /// Sets whether end-to-end encryption is disabled for this chat.
+    pub async fn set_e2ee_disabled(self, context: &Context, disabled: bool) -> Result<()> {
+        ensure!(!self.is_special(), "set e2ee disabled: invalid chat-id.");
+
+        let chat = Chat::load_from_db(context, self).await?;
+        let mut param = chat.param;
+        if disabled {
+            param.set_int(Param::ChatDisableE2ee, 1);
+        } else {
+            param.remove(Param::ChatDisableE2ee);
+        }
+        context
+            .sql
+            .execute("UPDATE chats SET param=? WHERE id=?;", (param.to_string(), self))
+            .await?;
+        Ok(())
+    }
+
+    /// Returns whether end-to-end encryption is disabled for this chat.
+    pub async fn is_e2ee_disabled(self, context: &Context) -> Result<bool> {
+        let chat = Chat::load_from_db(context, self).await?;
+        Ok(chat.param.get_bool(Param::ChatDisableE2ee).unwrap_or(false))
+    }
 }
 
 impl std::fmt::Display for ChatId {

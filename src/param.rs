@@ -187,6 +187,10 @@ pub enum Param {
 
     /// For Webxdc Message Instances: timestamp of summary update.
     WebxdcSummaryTimestamp = b'Q',
+
+    /// For Chats: if set, end-to-end encryption is disabled for this chat,
+    /// even if it is enabled globally.
+    ChatDisableE2ee = b'z',
 }
 
 /// An object for handling key=value parameter lists.

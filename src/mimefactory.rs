@@ -15,6 +15,7 @@ use crate::config::Config;
 use crate::constants::{Chattype, DC_FROM_HANDSHAKE};
 use crate::contact::Contact;
 use crate::context::{get_version_str, Context};
+use crate::aheader::EncryptPreference;
 use crate::e2ee::EncryptHelper;
 use crate::ephemeral::Timer as EphemeralTimer;
 use crate::html::new_html_mimepart;
@@ -325,6 +326,15 @@ impl<'a> MimeFactory<'a> {
         }
     }
 
+    fn prefers_e2ee(&self) -> bool {
+        match &self.loaded {
+            Loaded::Message { chat } => {
+                !chat.param.get_bool(Param::ChatDisableE2ee).unwrap_or(false)
+            }
+            Loaded::Mdn { .. } => false,
+        }
+    }
+
     fn should_force_plaintext(&self) -> bool {
         match &self.loaded {
             Loaded::Message { chat } => {
@@ -333,6 +343,13 @@ impl<'a> MimeFactory<'a> {
                 } else if chat.typ == Chattype::Broadcast {
                     // encryption may disclose recipients;
                     // this is probably a worse issue than not opportunistically (!) encrypting
+                    true
+                } else if chat
+                    .param
+                    .get_bool(Param::ChatDisableE2ee)
+                    .unwrap_or(false)
+                {
+                    // per-chat e2ee disabled
                     true
                 } else {
                     self.msg
@@ -648,8 +665,21 @@ impl<'a> MimeFactory<'a> {
         };
 
         let peerstates = self.peerstates_for_recipients(context).await?;
-        let should_encrypt =
-            encrypt_helper.should_encrypt(context, e2ee_guaranteed, &peerstates)?;
+        // If the chat prefers e2ee (per-chat toggle is on), encrypt whenever every
+        // recipient has a known key, even if it was learned from Autocrypt-Gossip
+        // and therefore has no `prefer-encrypt=mutual` preference. A peer that
+        // explicitly sent `prefer-encrypt=reset` is still left unencrypted.
+        // If any key is missing, fall back to the opportunistic behavior below
+        // so that sending never fails.
+        let prefer_e2ee = !e2ee_guaranteed
+            && !peerstates.is_empty()
+            && self.prefers_e2ee()
+            && peerstates.iter().all(|(state, _)| match state {
+                Some(peerstate) => peerstate.prefer_encrypt != EncryptPreference::Reset,
+                None => false,
+            });
+        let should_encrypt = prefer_e2ee
+            || encrypt_helper.should_encrypt(context, e2ee_guaranteed, &peerstates)?;
         let is_encrypted = should_encrypt && !force_plaintext;
 
         let message = if parts.is_empty() {
