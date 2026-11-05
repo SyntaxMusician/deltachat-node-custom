@@ -1,260 +1,115 @@
-# deltachat-node
+# deltachat-node-custom
 
-> node.js bindings for [`deltachat-core-rust`](..)
+`deltachat-node-custom` is a patched distribution of the
+[deltachat-core-rust](https://github.com/chatmail/core) v1.121.0 sources with
+npm packaging metadata, maintained for a custom deltachat-desktop build. It
+contains the Rust core of Delta Chat (an email-based messaging library) plus
+the historical `package.json` of the old `deltachat-node` npm package, with a
+small number of local patches applied on top of upstream v1.121.0.
 
-[![npm](https://img.shields.io/npm/v/deltachat-node.svg)](https://www.npmjs.com/package/deltachat-node)
-![Node version](https://img.shields.io/node/v/deltachat-node.svg)
-[![JavaScript Style Guide](https://img.shields.io/badge/code_style-prettier-brightgreen.svg)](https://prettier.io)
+## What is included
 
-`deltachat-node` primarily aims to offer two things:
+- **Rust core sources** — the `deltachat` crate in `src/` plus the workspace
+  members listed in the root `Cargo.toml`:
+  - `deltachat-ffi` — C FFI bindings (builds a `cdylib`/`staticlib` named
+    `deltachat`, i.e. the C library `libdeltachat`)
+  - `deltachat_derive` — derive macros
+  - `deltachat-jsonrpc` — JSON-RPC API crate (own crate, with a TypeScript
+    client in `deltachat-jsonrpc/typescript/`)
+  - `deltachat-rpc-server` — JSON-RPC server binary
+  - `deltachat-ratelimit` — rate limiting helper crate
+  - `deltachat-repl` — command-line REPL for testing a `Context`
+  - `format-flowed` — `format=flowed` (RFC 3676) text formatting crate
+- **`test-data/`** — test fixtures (autoconfig files, images, keys, sample
+  messages, webxdc apps)
+- **Vendored dependencies** in `local-git/` (`quinn`, `rust-email`,
+  `encoded-words`, `lettre`), wired in via `[patch]` sections in the root
+  `Cargo.toml`; see [NOTICE.md](./NOTICE.md) for their licenses and upstream URLs
+- **`package.json` / `.npmignore` / `.npmrc`** — npm packaging metadata kept
+  from the historical `deltachat-node` package (see "Packaging" below)
 
-- A high level JavaScript api with syntactic sugar
-- A low level c binding api around  [`deltachat-core-rust`](..)
+### What is NOT included (compared to upstream deltachat-core-rust)
 
-This code used to live at [`deltachat-node`](https://github.com/deltachat/deltachat-node)
+This repository does **not** contain the following parts of the upstream
+repository:
 
-## Table of Contents
+- `node/` — the Node.js/JavaScript bindings (the reason the old README and
+  `package.json` scripts referenced them; they do not exist here)
+- `python/` — the Python bindings
+- `scripts/` — helper scripts (e.g. `rebuild-core.js`)
+- `.github/` — CI workflows
+- `contrib/` — contributor tooling
+- documentation files such as `spec.md`, `standards.md`, `webxdc.md`
 
-<details><summary>Click to expand</summary>
+## Custom changes vs upstream v1.121.0
 
-- [Install](#install)
-- [Dependencies](#dependencies)
-- [Build from source](#build-from-source)
-- [Usage](#usage)
-- [Developing](#developing)
-- [License](#license)
+Two features are patched in relative to upstream tag `v1.121.0`:
 
-</details>
+### a) Fetch ALL existing inbox messages on first login
 
-## Install
+- `Config::FetchExistingMsgs` defaults to `"1"`
+  (`#[strum(props(default = "1"))]` in `src/config.rs`), so existing messages
+  are fetched on the first `start_io()` after configuring.
+- `DC_FETCH_EXISTING_MSGS_COUNT` is raised from `100` to `999999`
+  (`src/constants.rs`), i.e. effectively all existing inbox messages are
+  fetched instead of only the newest 100.
 
-By default the installation will try to use the bundled prebuilds in the
-npm package. If this fails it falls back to compile `../deltachat-core-rust` from
-this repository, using `scripts/rebuild-core.js`.
+### b) Per-chat end-to-end encryption toggle
 
-To install from npm use:
+- New `Param::ChatDisableE2ee = b'z'` (`src/param.rs`): when set on a chat,
+  end-to-end encryption is disabled for that chat even if enabled globally.
+- `ChatId::set_e2ee_disabled()` / `ChatId::is_e2ee_disabled()`
+  (`src/chat.rs`): set/query the toggle on a chat.
+- `MimeFactory` honors the toggle (`src/mimefactory.rs`):
+  - when the toggle is set, `should_force_plaintext()` returns `true` and the
+    outgoing message is forced to plaintext;
+  - when the toggle is not set, the chat "prefers e2ee": the message is
+    encrypted whenever **all** recipients have a known key (even keys learned
+    only via Autocrypt-Gossip, i.e. without a `prefer-encrypt=mutual`
+    preference; a peer that explicitly sent `prefer-encrypt=reset` is still
+    left unencrypted). If any recipient key is missing, it falls back to the
+    usual opportunistic encryption so sending never fails.
+- The `param` module is public (`pub mod param;` in `src/lib.rs`).
 
-```
-npm install deltachat-node
-```
+## Build
 
-## Dependencies
+Build and test from the repository root (a Cargo workspace):
 
-- Nodejs >= `v16.0.0`
-- rustup (optional if you can't use the prebuilds)
-
-> On Windows, you may need to also install **Perl** to be able to compile deltachat-core.
-
-## Build from source
-
-If you want to build from source, make sure that you have `rustup` installed.
-You can either use `npm install deltachat-node --build-from-source` to force
-building from source or clone this repository and follow this steps:
-
-1. `git clone https://github.com/deltachat/deltachat-core-rust.git`
-2. `cd deltachat-core-rust`
-3. `npm i`
-4. `npm run build`
-
-> Our `package.json` file is located in the root directory of this repository,
-> not inside this folder. (We need this in order to include the rust source
-> code in the npm package.)
-
-### Use a git branch in deltachat-desktop
-
-You can directly install a core branch, but make sure:
-- that you have typescript in your project dependencies, as it is likely required
-- you know that there are **no prebuilds** and so core is built during installation which is why it takes so long
-
-```
-npm install https://github.com/deltachat/deltachat-core-rust.git#branch
-```
-
-If you want prebuilds for a branch that has a core pr, you might find an npm tar.gz package for that branch at <https://download.delta.chat/node/preview/>.
-The github ci also posts a link to it in the checks for each pr.
-
-### Use build-from-source in deltachat-desktop
-
-If you want to use the manually built node bindings in the desktop client (for
-example), you can follow these instructions:
-
-First clone the
-[deltachat-desktop](https://github.com/deltachat/deltachat-desktop) repository,
-e.g. with `git clone https://github.com/deltachat/deltachat-desktop`.
-
-Then you need to make sure that this directory is referenced correctly in
-deltachat-desktop's package.json. You need to change
-`deltachat-desktop/package.json` like this:
-
-```
-diff --git i/package.json w/package.json
-index 45893894..5154512c 100644
---- i/package.json
-+++ w/package.json
-@@ -83,7 +83,7 @@
-     "application-config": "^1.0.1",
-     "classnames": "^2.3.1",
-     "debounce": "^1.2.0",
--    "deltachat-node": "1.79.3",
-+    "deltachat-node": "file:../deltachat-core-rust/",
-     "emoji-js-clean": "^4.0.0",
-     "emoji-mart": "^3.0.1",
-     "emoji-regex": "^9.2.2",
+```sh
+cargo build
+cargo test
 ```
 
-Then, in the `deltachat-desktop` repository, run:
+Requirements:
 
-1. `npm i`
-2. `npm run build`
-3. And `npm run start` to start the newly built client.
+- Rust 1.65+ (`rust-version = "1.65"` in the root `Cargo.toml`)
+- The default `vendored` feature builds the bundled sqlcipher and OpenSSL
+  sources (`rusqlite/bundled-sqlcipher-vendored-openssl`,
+  `reqwest/native-tls-vendored`, `async-native-tls/vendored`), so a **C
+  compiler** and **perl** are needed.
 
-### Workaround to build for x86_64 on Apple's M1
+`deltachat-ffi` produces the C library (`crate-type = ["cdylib", "staticlib"]`,
+library name `deltachat`); `deltachat-jsonrpc` is its own crate in the
+workspace.
 
-deltachat doesn't support universal (fat) binaries (that contain builds for both cpu architectures) yet, until it does you can use the following workaround to get x86_64 builds:
+## Packaging
 
-```
-$ fnm install 17 --arch x64
-$ fnm use 17
-$ node -p process.arch
-# result should be x64
-$ rustup target add x86_64-apple-darwin
-$ git apply patches/m1_build_use_x86_64.patch
-$ CARGO_BUILD_TARGET=x86_64-apple-darwin npm run build
-$ npm run test
-```
-
-(when using [fnm](https://github.com/Schniz/fnm) instead of nvm, you can select the architecture)
-If your node and electron are already build for arm64 you can also try building for arm:
-
-```
-$ fnm install 16 --arch arm64
-$ fnm use 16
-$ node -p process.arch
-# result should be arm64
-$ npm_config_arch=arm64 npm run build
-$ npm run test
-```
-
-## Usage
-
-```js
-const { Context } = require('deltachat-node')
-
-const opts = {
-  addr: '[email]',
-  mail_pw: '[password]',
-}
-
-const contact = '[email]'
-
-async function main() {
-  const dc = Context.open('./')
-  dc.on('ALL', console.log.bind(null, 'core |'))
-
-  try {
-    await dc.configure(opts)
-  } catch (err) {
-    console.error('Failed to configure because of: ', err)
-    dc.unref()
-    return
-  }
-
-  dc.startIO()
-  console.log('fully configured')
-
-  const contactId = dc.createContact('Test', contact)
-  const chatId = dc.createChatByContactId(contactId)
-  dc.sendMessage(chatId, 'Hi!')
-
-  console.log('sent message')
-
-  dc.once('DC_EVENT_SMTP_MESSAGE_SENT', async () => {
-    console.log('Message sent, shutting down...')
-    dc.stopIO()
-    console.log('stopped io')
-    dc.unref()
-  })
-}
-
-main()
-```
-this example can also be found in the examples folder [examples/send_message.js](./examples/send_message.js)
-
-### Generating Docs
-
-We are currently migrating to automatically generated documentation.
-You can find the old documentation at [old_docs](./old_docs).
-
-to generate the documentation, run:
-
-```
-npx typedoc
-```
-
-The resulting documentation can be found in the `docs/` folder.
-An online version can be found under [js.delta.chat](https://js.delta.chat).
-
-## Developing
-
-### Tests and Coverage
-
-Running `npm test` ends with showing a code coverage report, which is produced by [`nyc`](https://github.com/istanbuljs/nyc#readme).
-
-![test output](images/tests.png)
-
-The coverage report from `nyc` in the console is rather limited. To get a more detailed coverage report you can run `npm run coverage-html-report`. This will produce a html report from the `nyc` data and display it in a browser on your local machine.
-
-To run the integration tests you need to set the `DCC_NEW_TMP_EMAIL` environment variables. E.g.:
-
-```
-$ export DCC_NEW_TMP_EMAIL=https://testrun.org/new_email?t=[token]
-$ npm run test
-```
-
-### Scripts
-
-We have the following scripts for building, testing and coverage:
-
-- `npm run coverage` Creates a coverage report and passes it to `coveralls`. Only done by `Travis`.
-- `npm run coverage-html-report` Generates a html report from the coverage data and opens it in a browser on the local machine.
-- `npm run generate-constants` Generates `constants.js` and `events.js` based on the `deltachat-core-rust/deltachat-ffi/deltachat.h` header file.
-- `npm install` After dependencies are installed, runs `node-gyp-build` to see if the native code needs to be rebuilt.
-- `npm run build` Rebuilds all code.
-- `npm run build:core` Rebuilds code in `deltachat-core-rust`.
-- `npm run build:bindings` Rebuilds the bindings and links with `deltachat-core-rust`.
-- `ǹpm run clean` Removes all built code
-- `npm run prebuildify` Builds prebuilt binary to `prebuilds/$PLATFORM-$ARCH`. Copies `deltachat.dll` from `deltachat-core-rust` for windows.
-- `npm run download-prebuilds` Downloads all prebuilt binaries from github before `npm publish`.
-- `npm test` Runs `standard` and then the tests in `test/index.js`.
-- `npm run test-integration` Runs the integration tests.
-- `npm run hallmark` Runs `hallmark` on all markdown files.
-
-### Releases
-
-The following steps are needed to make a release:
-
-1. Wait until `pack-module` github action is completed
-2. Run `npm publish https://download.delta.chat/node/deltachat-node-1.x.x.tar.gz` to publish it to npm. You probably need write rights to npm.
+The `package.json` in the repository root is kept from the historical
+`deltachat-node` npm package: name `deltachat-node`, version `1.121.788`,
+license `GPL-3.0-or-later`. However, the JavaScript bindings (`node/`) that
+this package originally shipped are **not** part of this repository — only the
+Rust sources and the packaging metadata are present.
 
 ## License
 
-Licensed under `GPL-3.0-or-later`, see [LICENSE](./LICENSE) file for details.
+- The Rust core is licensed under **MPL-2.0** — see [LICENSE](./LICENSE).
+- The npm packaging metadata (`package.json`) is **GPL-3.0-or-later**.
+- See [NOTICE.md](./NOTICE.md) for full attribution, including the vendored
+  dependencies under `local-git/`.
 
->    Copyright © 2018 `DeltaChat` contributors.
->
->    This program is free software: you can redistribute it and/or modify
->    it under the terms of the GNU General Public License as published by
->    the Free Software Foundation, either version 3 of the License, or
->    (at your option) any later version.
->
->    This program is distributed in the hope that it will be useful,
->    but WITHOUT ANY WARRANTY; without even the implied warranty of
->    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
->    GNU General Public License for more details.
->
->    You should have received a copy of the GNU General Public License
->    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+## Provenance
 
-[appveyor-shield]: https://ci.appveyor.com/api/projects/status/t0narp672wpbl6pd?svg=true
-
-[appveyor]: https://ci.appveyor.com/project/ralphtheninja/deltachat-node-d4bf8
+This distribution is based on [chatmail/core](https://github.com/chatmail/core)
+(formerly `deltachat/deltachat-core-rust`) **tag `v1.121.0`**. Upstream has
+since moved on to the 2.x line; this repository tracks the 1.121 line with the
+custom patches described above.
