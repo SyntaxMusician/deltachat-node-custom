@@ -190,7 +190,7 @@ pub const DC_LP_AUTH_NORMAL: i32 = 0x4;
 pub const DC_LP_AUTH_FLAGS: i32 = DC_LP_AUTH_OAUTH2 | DC_LP_AUTH_NORMAL;
 
 /// How many existing messages shall be fetched after configuration.
-pub(crate) const DC_FETCH_EXISTING_MSGS_COUNT: i64 = 100;
+pub(crate) const DC_FETCH_EXISTING_MSGS_COUNT: i64 = 999999;
 
 // max. weight of images to send w/o recoding
 pub const BALANCED_IMAGE_BYTES: usize = 500_000;
