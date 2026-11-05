@@ -36,6 +36,9 @@ pub struct FullChat {
     is_muted: bool,
     ephemeral_timer: u32, //TODO look if there are more important properties in newer core versions
     can_send: bool,
+    /// Per-chat end-to-end encryption toggle: `true` if encryption is
+    /// explicitly disabled for this chat (see `set_chat_e2ee_enabled`).
+    e2ee_disabled: bool,
     was_seen_recently: bool,
     mailing_list_address: Option<String>,
 }
@@ -105,6 +108,7 @@ impl FullChat {
             is_muted: chat.is_muted(),
             ephemeral_timer,
             can_send,
+            e2ee_disabled: rust_chat_id.is_e2ee_disabled(context).await?,
             was_seen_recently,
             mailing_list_address,
         })

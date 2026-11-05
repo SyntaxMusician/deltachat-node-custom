@@ -902,6 +902,27 @@ impl CommandApi {
             .await
     }
 
+    /// Enable or disable end-to-end encryption for a single chat.
+    ///
+    /// This is the per-chat toggle on top of the global `e2ee_enabled`
+    /// setting: when it is disabled (`enabled` = false), outgoing messages
+    /// in this chat are forced to plaintext even if keys are known; when it
+    /// is enabled, messages are encrypted whenever all recipients have a
+    /// known key (falling back to plaintext if a key is missing, so sending
+    /// never fails). The current state is exposed as `e2eeDisabled` in the
+    /// result of `get_full_chat_by_id`.
+    async fn set_chat_e2ee_enabled(
+        &self,
+        account_id: u32,
+        chat_id: u32,
+        enabled: bool,
+    ) -> Result<()> {
+        let ctx = self.get_context(account_id).await?;
+        ChatId::new(chat_id)
+            .set_e2ee_disabled(&ctx, !enabled)
+            .await
+    }
+
     async fn get_chat_ephemeral_timer(&self, account_id: u32, chat_id: u32) -> Result<u32> {
         let ctx = self.get_context(account_id).await?;
         Ok(ChatId::new(chat_id)
