@@ -26,8 +26,8 @@ opt-level = "z"
 codegen-units = 1
 
 [patch.crates-io]
-quinn-udp = { git = "https://github.com/quinn-rs/quinn", branch="main" }
-quinn-proto = { git = "https://github.com/quinn-rs/quinn", branch="main" }
+quinn-udp = { path = "local-git/quinn/quinn-udp" }
+quinn-proto = { path = "local-git/quinn/quinn-proto" }
 
 [dependencies]
 deltachat_derive = { path = "./deltachat_derive" }
@@ -44,8 +44,10 @@ backtrace = "0.3"
 base64 = "0.21"
 brotli = { version = "3.3", default-features=false, features = ["std"] }
 chrono = { version = "0.4", default-features=false, features = ["clock", "std"] }
-email = { git = "https://github.com/deltachat/rust-email", branch = "master" }
-encoded-words = { git = "https://github.com/async-email/encoded-words", branch = "master" }
+email = { path = "local-git/rust-email" }
+# email = { git = "https://github.com/deltachat/rust-email", branch = "master" }
+# encoded-words = { git = "https://github.com/async-email/encoded-words", branch = "master" }
+encoded-words = { path = "local-git/encoded-words" }
 escaper = "0.1"
 fast-socks5 = "0.8"
 futures = "0.3"
@@ -55,7 +57,8 @@ humansize = "2"
 image = { version = "0.24.6", default-features=false, features = ["gif", "jpeg", "ico", "png", "pnm", "webp", "bmp"] }
 iroh = { version = "0.4.1", default-features = false }
 kamadak-exif = "0.5"
-lettre_email = { git = "https://github.com/deltachat/lettre", branch = "master" }
+# lettre_email = { git = "https://github.com/deltachat/lettre", branch = "master" }
+lettre_email = { path = "local-git/lettre/lettre_email" }
 libc = "0.2"
 mailparse = "0.14"
 mime = "0.3.17"
@@ -159,3 +162,12 @@ vendored = [
   "rusqlite/bundled-sqlcipher-vendored-openssl",
   "reqwest/native-tls-vendored"
 ]
+
+[patch."https://github.com/deltachat/rust-email"]
+email = { path = "local-git/rust-email" }
+
+[patch."https://github.com/async-email/encoded-words"]
+encoded-words = { path = "local-git/encoded-words" }
+
+[patch."https://github.com/deltachat/lettre"]
+lettre_email = { path = "local-git/lettre/lettre_email" }
