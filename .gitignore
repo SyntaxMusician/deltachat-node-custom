@@ -1,0 +1,43 @@
+# Rust build artifacts
+/target
+**/*.rs.bk
+
+# Node.js
+node_modules/
+node/build/
+node/dist/
+node/prebuilds/
+node/.nyc_output/
+.nyc_output/
+coverage/
+
+# Python
+__pycache__/
+*.egg-info/
+.tox/
+.venv/
+.pytest_cache/
+
+# Delta Chat account databases and profiles (never commit correspondence)
+*.db
+*.db-blobs
+*.sqlite
+*.sqlite3
+*.dc-accounts
+.dc-history.txt
+accounts/
+accounts.txt
+
+# Secrets and local configuration
+.env
+.env.*
+*.pem
+*.p12
+
+# Editor / OS temporaries
+.vscode/
+.idea/
+.DS_Store
+*~
+*.swp
+*.swo

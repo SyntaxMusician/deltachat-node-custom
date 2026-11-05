@@ -1,0 +1,43 @@
+[package]
+name = "deltachat-jsonrpc"
+version = "1.121.0"
+description = "DeltaChat JSON-RPC API"
+edition = "2021"
+default-run = "deltachat-jsonrpc-server"
+license = "MPL-2.0"
+
+[[bin]]
+name = "deltachat-jsonrpc-server"
+path = "src/webserver.rs"
+required-features = ["webserver"]
+
+[dependencies]
+anyhow = "1"
+deltachat = { path = ".." }
+num-traits = "0.2"
+schemars = "0.8.11"
+serde = { version = "1.0", features = ["derive"] }
+tempfile = "3.6.0"
+log = "0.4"
+async-channel = { version = "1.8.0" }
+futures = { version = "0.3.28" }
+serde_json = "1.0.99"
+yerpc = { version = "0.5.1", features = ["anyhow_expose", "openrpc"] }
+typescript-type-def = { version = "0.5.5", features = ["json_value"] }
+tokio = { version = "1.29.1" }
+sanitize-filename = "0.4"
+walkdir = "2.3.3"
+base64 = "0.21"
+
+# optional dependencies
+axum = { version = "0.6.18", optional = true, features = ["ws"] }
+env_logger = { version = "0.10.0", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.29.1", features = ["full", "rt-multi-thread"] }
+
+
+[features]
+default = ["vendored"]
+webserver = ["dep:env_logger", "dep:axum", "tokio/full", "yerpc/support-axum"]
+vendored = ["deltachat/vendored"]
